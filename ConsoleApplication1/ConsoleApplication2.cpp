@@ -1,0 +1,518 @@
+
+#include "stdafx.h"
+#include "Source.h"
+#include <vector>
+#include <math.h> 
+#include <algorithm>
+#include <iostream>
+#include <opencv2/highgui/highgui.hpp>
+#include <thread> 
+#include <chrono>
+using namespace std;
+using namespace cv;
+
+const double MR = 0.2;
+const double CP = 0.7;
+struct Segment {
+
+};
+enum direction{
+	LEFT=0,
+	RIGHT,
+	UP,
+	DOWN,
+	NONE
+};
+
+struct Vertex {
+	int distance;
+	int parent;
+	int child;
+	bool visited = false;
+	bool selected = false;
+};
+
+struct Node {
+	int id = 0;
+	int segment=0;
+	Node * neighbours[4];
+	bool visited = false;
+};
+
+struct Chromosome {
+	vector<direction> directions;
+	int width;
+	int height;
+	double pixelDistance;
+	double connectivity;
+	double deviation;
+	double fitness;
+	vector<int> border;
+};
+
+struct chrom_sort {
+	bool operator()(const Chromosome &left, const Chromosome &right) {
+		return left.fitness > right.fitness;
+	}
+};
+
+void neighbours(Node* node, int segment) {
+	node -> visited = true;
+	node -> segment = segment;
+	for (Node* neighbour : node->neighbours) {
+		if (neighbour != NULL && neighbour -> visited == false) {
+			neighbours(neighbour, segment);
+		}
+		
+	}
+}
+vector<Node*> segmentation(vector<Node*> nodes) {
+	int segment = 0;
+	for (Node* node : nodes) {
+		if (node -> visited == false) {
+			neighbours(node, segment);
+			segment++;
+		}
+	}
+	return nodes;
+
+}
+
+vector<Node*> graphing(Chromosome c) {
+	vector<Node*> nodes;
+	for (unsigned int i = 0; i < c.directions.size(); i++)
+		nodes.push_back(new Node());
+	for (int y = 0; y < c.height; y++) {
+		for (int x = 0; x < c.width; x++) {
+			int i = x + y*c.width;
+			Node* n = nodes[i];
+			int dir = c.directions[i];
+			switch (dir) {
+			case LEFT:
+				if (x != 0) {
+					Node* neighbour = nodes[x - 1 + y*c.width];
+					n->neighbours[0] = neighbour;
+					neighbour->neighbours[1] = n;
+				}
+				break;
+			case RIGHT:
+				if (x != c.width - 1) {
+					Node* neighbour = nodes[x + 1 + y*c.width];
+					n->neighbours[1] = neighbour;
+					neighbour->neighbours[0] = n;
+				}
+				break;
+			case UP:
+				if (y != 0) {
+					Node* neighbour = nodes[x + (y - 1)*c.width];
+					n->neighbours[2] = neighbour;
+					neighbour->neighbours[3] = n;
+				}
+				break;
+			case DOWN:
+				if (y != c.height - 1) {
+					Node* neighbour = nodes[x + (y + 1)*c.width];
+					n->neighbours[3] = neighbour;
+					neighbour->neighbours[2] = n;
+				}
+				break;
+			case NONE:
+				break;
+			}
+
+		}
+	}
+
+	return nodes;
+}
+
+
+
+double rgbDistance(int r1, int r2, int g1, int g2, int b1, int b2) {
+	return sqrt(pow(r1 - r2,2) + pow(g1 - g2,2) + pow(b1 - b2,2))/441.673;
+}
+
+void imageToGraph(struct Graph* graph, Mat image) {
+	int channels = image.channels();
+	int nRows = image.rows;
+	int nCols = image.cols;
+	uchar* old = image.ptr<uchar>(0);
+	for (int i = 0; i < nRows; i++) {
+		uchar* p = image.ptr<uchar>(i);
+		for (int j = 0; j < nCols; j++) {
+			if (i > 0) {
+				addEdge(graph, i*nCols + j, (i - 1)*nCols + j, rgbDistance(p[3 * j], old[3 * j], p[3 * j + 1], old[3 * j + 1], p[3 * j + 2], old[3 * j + 2]));
+			}
+			if (j > 0) {
+				addEdge(graph, i*nCols + j, i*nCols + j-1, rgbDistance(p[3 * j], p[3 * (j-1)], p[3 * j + 1], p[3 * (j - 1) +1], p[3 * j + 2], p[3 * (j - 1) +2]));
+			}
+		}
+		old = p;
+	}
+}
+
+Chromosome mstToChromosome(int* mst, int V) {
+	Chromosome c;
+	for (int i = 0; i < V; i++) {
+		if (mst[i] == -1) {
+			c.directions.push_back(NONE);
+		}
+		else if (mst[i] == i-1) {
+			c.directions.push_back(LEFT);
+		}
+		else if (mst[i] == i+1) {
+			c.directions.push_back(RIGHT);
+		}
+		else if (mst[i] < i) {
+			c.directions.push_back(UP);
+		}
+		else if (mst[i] > i) {
+			c.directions.push_back(DOWN);
+		}
+		else {
+			cout << "ERR" << endl;
+		}
+	}
+	return c;
+}
+
+void pix_dist(int i, int x, int y, int & sum, uchar* p, uchar* p0, int nRows, int nCols) {
+
+
+	if (x != 0) {
+		sum += rgbDistance(p[3 * x], p[3 * (x - 1)], p[3 * x + 1], p[3 * (x - 1) + 1], p[3 * x + 2], p[3 * (x - 1) + 2]);
+	}
+	if (x != nCols - 1) {
+		sum += rgbDistance(p[3 * x], p[3 * (x + 1)], p[3 * x + 1], p[3 * (x + 1) + 1], p[3 * x + 2], p[3 * (x + 1) + 2]);
+	}
+	if (y != 0) {
+		sum += rgbDistance(p[3 * x], p0[3 * x], p[3 * x + 1], p0[3 * x + 1], p[3 * x + 2], p0[3 * x + 2]);
+	}
+	if (y != nRows - 1) {
+		sum += rgbDistance(p[3 * x], p0[3 * x], p[3 * x + 1], p0[3 * x + 1], p[3 * x + 2], p0[3 * x + 2]);
+	}
+}
+double pixelDistance(vector<Node*> nodes, Mat* image, vector<int> border) {
+	double sum = 0;
+	int nCols = image->cols;
+	int nRows = image->rows;
+	uchar* p = image->ptr<uchar>(0);
+	uchar* p0 = image->ptr<uchar>(0);
+	int prevY = 0;
+	vector<thread> threads;
+	for (int i : border) {
+		int x = i%nCols;
+		int y = i / nCols;
+		if (y != prevY) {
+			p = image->ptr<uchar>(y);
+			p0 = image->ptr<uchar>(y - 1);
+			prevY = y;
+		}
+		threads.push_back(pix_dist, i, x, y, sum, p, p0, nRows, nCols);
+	}
+	for (int i = 0; i < threads.size(); i++) {
+		threads[i].join();
+	}
+	return sum;
+}
+
+void conn_thread(int & sum, int i, int F, int nCols, int nRows) {
+	int x = i%nCols;
+	int y = i / nCols;
+	if (x != 0) {
+		sum += F;
+	}
+	if (x != nCols - 1) {
+		sum += F;
+	}
+	if (y != 0) {
+		sum += F;
+	}
+	if (y != nRows - 1) {
+		sum += F;
+	}
+}
+
+double connectivity(vector<Node*> nodes, Mat* image, vector<int> border) {
+	const double F = 0.125;
+	double sum = 0;
+	int nCols = image->cols;
+	int nRows = image->rows;
+	vector<thread> threads;
+	for (int i: border) {
+		threads.append(thread(conn_thread,sum, i, F, nCols, nRows));
+	}
+	for (int i = 0; i < threads.size(); i++) {
+		threads[i].join();
+	}
+	return sum;
+}
+
+double deviation(vector<Node*> nodes, Mat* image) {
+	map<int, double> rAverages;
+	map<int, double> gAverages;
+	map<int, double> bAverages;
+	map<int, int> amount;
+	int nCols = image->cols;
+	
+	int maxSegment = 0;
+	uchar* p = image->ptr<uchar>(0);
+	int prevY = 0;
+	for (int i = 0; i < nodes.size(); i++) {
+		int x = i%nCols;
+		int y = i / nCols;
+		if (y != prevY) {
+			p = image->ptr<uchar>(y);
+			y = prevY;
+		}
+		int segment = nodes[i]->segment;
+		rAverages[segment] += p[3 * x];
+		gAverages[segment] += p[3 * x+1];
+		bAverages[segment] += p[3 * x+2];
+		amount[segment]++;
+		maxSegment = max(segment, maxSegment);
+	}
+	for (int i = 0; i < maxSegment; i++) {
+		rAverages[i] /= amount[i];
+		gAverages[i] /= amount[i];
+		bAverages[i] /= amount[i];
+	}
+	double sum = 0;
+	p = image->ptr<uchar>(0);
+	prevY = 0;
+	for (int i = 0; i < nodes.size(); i++) {
+		int x = i%nCols;
+		int y = i / nCols;
+		
+		if (y != prevY) {
+			p = image->ptr<uchar>(y);
+			y = prevY;
+		}
+		sum += rgbDistance(p[3*x], rAverages[nodes[i]->segment], p[3 * x+1], gAverages[nodes[i]->segment], p[3 * x+2], bAverages[nodes[i]->segment]);
+	}
+	return sum;
+}
+
+void mutate(Chromosome* c) {
+	double r = float(rand()) / float(RAND_MAX);
+	if (r < MR) {
+		int gene = rand() % c->directions.size();
+		direction newDir = static_cast<direction>(rand() % 5);
+		c->directions[gene] = newDir;
+	}
+}
+vector<int> border(vector<Node*> nodes, Mat* im) {
+	vector<int> border;
+	int nCols = im->cols;
+	int nRows = im->rows;
+	for (int y = 0; y < nRows; y++) {
+		for (int x = 0; x < nCols; x++) {
+			if (x > 0 && nodes[x+y*nCols]->segment != nodes[x-1 + y*nCols]->segment) {
+				border.push_back(x + y*nCols);
+			}
+			else if (x < nCols - 1 && nodes[x + y*nCols]->segment != nodes[x + 1 + y*nCols]->segment) {
+				border.push_back(x + y*nCols);
+			}
+			else if (y >0 && nodes[x + y*nCols]->segment != nodes[x + (y-1)*nCols]->segment) {
+				border.push_back(x + y*nCols);
+			}
+			else if (y < nRows - 1 && nodes[x + y*nCols]->segment != nodes[x + (y+1)*nCols]->segment) {
+				border.push_back(x + y*nCols);
+			}
+		}
+	}
+	return border;
+}
+void getScores(Chromosome* c, Mat* im) {
+	auto start = std::chrono::system_clock::now();
+	vector<Node*> nodes = graphing(*c);
+	const double A = 1.0, B = 1.0, C = 0.0;
+	auto end = std::chrono::system_clock::now();
+	std::chrono::duration<double> elapsed_seconds = end - start;
+	cout << "Graphing = " << elapsed_seconds.count() << endl;
+	start = std::chrono::system_clock::now();
+	segmentation(nodes);
+	end = std::chrono::system_clock::now();
+	elapsed_seconds = end - start;
+	cout << "Segmentation = " << elapsed_seconds.count() << endl;
+	start = std::chrono::system_clock::now();
+	vector<int> bor = border(nodes, im);
+	end = std::chrono::system_clock::now();
+	elapsed_seconds = end - start;
+	cout << "Bordering = " << elapsed_seconds.count() << endl;
+	c->border = bor;
+	start = std::chrono::system_clock::now();
+	cout << "Border size: " << bor.size() << endl;
+	c->connectivity = connectivity(nodes, im, bor);
+	end = std::chrono::system_clock::now();
+	elapsed_seconds = end - start;
+	cout << "Conenctivity = " << elapsed_seconds.count() << endl;
+	start = std::chrono::system_clock::now();
+	//c->deviation = deviation(nodes, im);
+	c->pixelDistance = pixelDistance(nodes, im, bor) / nodes.size();
+	end = std::chrono::system_clock::now();
+	elapsed_seconds = end - start;
+	cout << "Pixel distance = " << elapsed_seconds.count() << endl;
+	c->fitness = 0.001+ A*c->pixelDistance - B/(c->connectivity+0.01) + C/c->deviation;
+	for (int i = 0; i < nodes.size(); i++) {
+		delete nodes[i];
+	}
+}
+
+pair<Chromosome, Chromosome> crossover(Chromosome* p1, Chromosome* p2, Mat* im) {
+	Chromosome c1;
+	Chromosome c2;
+	c1.height = p1->height;
+	c2.height = p2->height;
+	c1.width = p1->width;
+	c2.width = p2->width;
+	for (int i = 0; i < p1->directions.size(); i++) {
+		double r = float(rand()) / float(RAND_MAX);
+		if (r < CP) {
+			c1.directions.push_back(p1->directions[i]);
+			c2.directions.push_back(p2->directions[i]);
+		}
+		else {
+			c1.directions.push_back(p2->directions[i]);
+			c2.directions.push_back(p1->directions[i]);
+		}
+	}
+
+	mutate(&c1);
+	mutate(&c2);
+	getScores(&c1, im);
+	getScores(&c2, im);
+	return make_pair(c1, c2);
+}
+
+vector<Chromosome> selection(vector<Chromosome> pop, int popSize) {
+	vector<Chromosome> newPopulation;
+	vector<double> fitness;
+	double min_fitness = -1;
+	for (int i = 0; i < pop.size(); i++) {
+		Chromosome* chr= &(pop[i]);
+		double f = chr->fitness;
+		fitness.push_back(f);
+		if (min_fitness == -1 || min_fitness > f) {
+			min_fitness = f;
+		}
+	}
+	double sum = 0;
+	for (int i = 0; i < fitness.size(); i++) {
+		fitness[i] -= min_fitness*0.975;
+		sum += fitness[i];
+	}
+	vector<pair<double, int>> survivors;
+	for (int i = 0; i < fitness.size(); i++) {
+		survivors.push_back(make_pair((double)fitness[i] / sum, i));
+	}
+	for (int i = 0; i < popSize; i++) {
+		double r = ((double)rand() / (RAND_MAX));
+		for (int j = 0; j < survivors.size(); j++) {
+			r -= survivors[j].first;
+			if (r < 0) {
+				Chromosome c = Chromosome(pop[survivors[j].second]);
+				newPopulation.push_back(c);
+				break;
+			}
+		}
+	}
+	//reverse(newPopulation.population.begin(), newPopulation.population.end());
+
+	return newPopulation;
+}
+
+void crossoverThread(Chromosome* c1, Chromosome* c2, Mat* im, int index, vector<Chromosome> *pop) {
+	pair<Chromosome, Chromosome> chromosomes = crossover(c1, c2, im);
+	(*pop)[2 * index] = chromosomes.first;
+	(*pop)[2 * index + 1] = chromosomes.second;
+}
+
+vector<Chromosome> generation(vector<Chromosome> population, int popSize, Mat* im) {
+	vector<Chromosome> newPop;
+	newPop.resize(population.size());
+	vector<Chromosome> elitism;
+	int elites = 3;
+	for (int i = 0; i < 3; i++) {
+		elitism.push_back(population[i]);
+	}
+	population = selection(population, popSize);
+	random_shuffle(population.begin(), population.end());
+	vector<thread> threads;
+	for (int i = 0; i < population.size()/2 -1; i++) {
+		//crossoverThread(&population[2 * i], &population[2 * i + 1], im, i, &newPop);
+		crossoverThread(&population[2 * i], &population[2 * i + 1], im, i, &newPop);
+	}
+	for (int i = 0; i < threads.size(); i++) {
+		threads[i].join();
+	}
+	threads.clear();
+
+	for (int i = 0; i < elites; i++) {
+		newPop.push_back(elitism[i]);
+	}
+
+	sort(newPop.begin(), newPop.end(), chrom_sort());
+	while (newPop.size() > popSize) {
+		newPop.pop_back();
+	}
+	return newPop;
+}
+
+void draw(Chromosome* c, Mat im, string path) {
+	int nCols = im.cols;
+	for (int i : c->border) {
+		int x = i%nCols;
+		int y = i / nCols;
+		uchar* p = im.ptr<uchar>(y);
+		p[3*x] = 0;
+		p[3*x+1] = 0;
+		p[3*x+2] = 0;
+	}
+	imwrite(path, im);
+}
+
+void initChr(struct Graph* graph, Mat im, vector<Chromosome> *population, int i) {
+	int* mst = PrimMST(graph);
+	Chromosome chr = mstToChromosome(mst, graph->V);
+	chr.height = im.rows;
+	chr.width = im.cols;
+	getScores(&chr, &im);
+	(*population)[i] = chr;
+	delete[] mst;
+}
+int main()
+{
+	Mat im = imread("C:/Users/Kevin/Documents/Training/118035/Test Image.jpg");
+
+	int y = 0;
+	int popSize = 50;
+	struct Graph* graph = createGraph(im.rows*im.cols);
+	imageToGraph(graph, im);
+	vector<Chromosome> population(popSize);
+	vector<thread> threads;
+	for (int i = 0; i < popSize; i++) {
+		initChr(graph, im, &population, i);
+		/*
+		int* mst = PrimMST(graph);
+		Chromosome chr = mstToChromosome(mst, graph->V);
+		chr.height = im.rows;
+		chr.width = im.cols;
+		getScores(&chr, &im);
+		population[i] = chr;
+		delete[] mst;
+		*/
+
+	}
+	for (int i = 0; i < 100; i++) {
+		cout << "Generation " << i << endl;
+		population = generation(population, popSize, &im);
+		draw(&population[0], im, "C:/Users/Kevin/Documents/Training/118035/Test Image" + to_string(i) + ".jpg");
+		cout << "Best fitness" << population[0].fitness << " Worst: " << population[population.size()-1].fitness << endl;
+	}
+	cin >> y;
+	int x = 0;
+	cin >> x;
+    return 0;
+}
+

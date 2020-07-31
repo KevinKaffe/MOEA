@@ -1,0 +1,25 @@
+﻿  ConsoleApplication1.cpp
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(186): warning C4244: 'argument': conversion from 'double' to 'int', possible loss of data
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(189): warning C4244: 'argument': conversion from 'double' to 'int', possible loss of data
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(337): warning C4244: 'argument': conversion from 'double' to 'int', possible loss of data
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(410): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(422): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(445): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(454): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(459): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(464): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(487): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(527): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(534): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(547): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(551): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(560): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(582): warning C4018: '>': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(584): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(587): warning C4018: '<=': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(626): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(643): warning C4018: '>': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(710): warning C4018: '<': signed/unsigned mismatch
+c:\users\kevin\documents\consoleapplication1\consoleapplication1\consoleapplication1.cpp(883): warning C4018: '<': signed/unsigned mismatch
+  ConsoleApplication1.vcxproj -> C:\Users\Kevin\Documents\ConsoleApplication1\Debug\ConsoleApplication1.exe
+  ConsoleApplication1.vcxproj -> C:\Users\Kevin\Documents\ConsoleApplication1\Debug\ConsoleApplication1.pdb (Full PDB)
